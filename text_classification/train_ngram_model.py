@@ -9,19 +9,22 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import argparse
 
 import tensorflow as tf
 
-import build_model
-import load_data
-import vectorize_data
+from text_classification.build_model import mlp_model
+from text_classification.load_data import load_cnews_dataset
+from text_classification.vectorize_data import ngram_vectorize
+from text_classification.explore_data import get_num_classes
 
 
 FLAGS = None
 
 
 def train_ngram_model(data,
+                      model_dir,
                       learning_rate=1e-3,
                       epochs=1000,
                       batch_size=128,
@@ -32,6 +35,7 @@ def train_ngram_model(data,
 
     # Arguments
         data: tuples of training and test texts and labels.
+        model_dir: string, path of model will be saved.
         learning_rate: float, learning rate for training model.
         epochs: int, number of epochs.
         batch_size: int, number of samples per batch.
@@ -46,14 +50,19 @@ def train_ngram_model(data,
     # Get the data.
     (train_texts, train_labels), (val_texts, val_labels),  (test_texts, test_labels) = data
 
-    # Vectorize texts.
-    x_train, x_val, x_test = vectorize_data.ngram_vectorize(
-        train_texts, train_labels, val_texts, test_texts)
+    num_classes = get_num_classes(train_labels)
 
-    num_classes = len(train_labels)
+    # Vectorize texts.
+    x_train, x_val, x_test = ngram_vectorize(
+        train_texts, train_labels, val_texts, test_texts, model_dir)
+
+    # convert sparse matrix to dense
+    x_train = x_train.toarray()
+    x_val = x_val.toarray()
+    x_test = x_test.toarray()
 
     # Create model instance.
-    model = build_model.mlp_model(layers=layers,
+    model = mlp_model(layers=layers,
                                   units=units,
                                   dropout_rate=dropout_rate,
                                   input_shape=x_train.shape[1:],
@@ -92,7 +101,7 @@ def train_ngram_model(data,
             acc=history['val_acc'][-1], loss=history['val_loss'][-1]))
 
     # Save model.
-    model.save('cnews_mlp_model.h5')
+    model.save(os.path.join(model_dir, 'cnews_mlp_model.h5'))
 
     # evaluate model
     loss, accuracy = model.evaluate(x_test, test_labels, batch_size=32)
@@ -105,8 +114,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='./data',
                         help='input data directory')
+    parser.add_argument('--model_dir', type=str, default='./saved_model',
+                        help='path to the location of saved model')
+
     FLAGS, unparsed = parser.parse_known_args()
 
+    if not tf.io.gfile.exists(FLAGS.model_dir):
+        tf.io.gfile.mkdir(FLAGS.model_dir)
+
     # Using the cnews dataset to training n-gram model
-    data = load_data.load_cnews_dataset(FLAGS.data_dir)
-    train_ngram_model(data)
+    data = load_cnews_dataset(FLAGS.data_dir)
+    train_ngram_model(data, model_dir=FLAGS.model_dir)

@@ -1,7 +1,7 @@
 """
 Read the required fields (texts and labels).
 Do any pre-processing if required. For example, make sure all label values are in range [0, num_classes-1].
-Split the data into training and validation sets.
+Split the data into training, validation sets and testing sets.
 Shuffle the training data.
 """
 
@@ -45,6 +45,9 @@ def load_cnews_dataset(data_path, seed=123):
 
         Download and uncompress archive from:
         http://thuctc.thunlp.org/
+
+        Alternative subset can be download from: https://pan.baidu.com/s/1hugrfRu 
+        password: qfud
     """
 
     categories, cat_to_id = read_category()
@@ -82,14 +85,14 @@ def load_cnews_dataset(data_path, seed=123):
             test_labels.append(cat_to_id[label])
 
     # Verify that validation labels are in the same range as training labels.
-    # unexpected_labels_id = [v for v in val_labels_id if v not in train_labels_id]
-    # if len(unexpected_labels_id):
-    #     raise ValueError('Unexpected label values found in the validation set:'
-    #                      ' {unexpected_labels}. Please make sure that the '
-    #                      'labels in the validation set are in the same range '
-    #                      'as training labels.'.format(
-    #                          unexpected_labels="".join([
-    #                              val_unique_labels[id] for id in unexpected_labels_id])))
+    unexpected_labels_id = [v for v in val_labels if v not in train_labels]
+    if len(unexpected_labels_id):
+        raise ValueError('Unexpected label values found in the validation set:'
+                         ' {unexpected_labels}. Please make sure that the '
+                         'labels in the validation set are in the same range '
+                         'as training labels.'.format(
+                             unexpected_labels=", ".join([
+                                 categories[id] for id in unexpected_labels_id])))
 
     train_texts, train_labels = shuffle_list(train_texts, train_labels)
     val_texts, val_labels = shuffle_list(val_texts, val_labels)

@@ -6,10 +6,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import pickle
 
-from tensorflow.python.keras.preprocessing import sequence
-from tensorflow.python.keras.preprocessing import text
+from tensorflow.keras.preprocessing import sequence
+from tensorflow.keras.preprocessing import text
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import f_classif
@@ -34,7 +35,7 @@ MIN_DOCUMENT_FREQUENCY = 2
 MAX_SEQUENCE_LENGTH = 500
 
 
-def ngram_vectorize(train_texts, train_labels, val_texts, test_texts):
+def ngram_vectorize(train_texts, train_labels, val_texts, test_texts, model_dir):
     """Vectorizes texts as ngram vectors.
 
     1 text = 1 tf-idf vector the length of vocabulary of uni-grams + bi-grams.
@@ -43,9 +44,11 @@ def ngram_vectorize(train_texts, train_labels, val_texts, test_texts):
         train_texts: list, training text strings.
         train_labels: np.ndarray, training labels.
         val_texts: list, validation text strings.
+        test_texts: list, testing text strings.
+        model_dir, string, locaction of vectorizer and selector will be saved.
 
     # Returns
-        x_train, x_val: vectorized training and validation texts
+        x_train, x_val, x_test: vectorized training, validation texts and testing texts
     """
     # Create keyword arguments to pass to the 'tf-idf' vectorizer.
     kwargs = {
@@ -78,7 +81,49 @@ def ngram_vectorize(train_texts, train_labels, val_texts, test_texts):
     x_val = x_val.astype('float32')
     x_test = x_test.astype('float32')
 
-    pickle.dump(vectorizer, open("vectorizer.pickle", "wb"))
-    pickle.dump(selector, open("selector.pickle", "wb"))
+    pickle.dump(vectorizer, open(os.path.join(model_dir, 'vectorizer.pickle'), "wb"))
+    pickle.dump(selector, open(os.path.join(model_dir, 'selector.pickle'), "wb"))
 
     return x_train, x_val, x_test
+
+
+def sequence_vectorize(train_texts, val_texts, test_texts, model_dir):
+    """Vectorizes texts as sequence vectors.
+
+    1 text = 1 sequence vector with fixed length.
+
+    # Arguments
+        train_texts: list, training text strings.
+        val_texts: list, validation text strings.
+        test_texts: list, testing text strings.
+        model_dir, string, locaction of vectorizer and selector will be saved.
+
+    # Returns
+        x_train, x_val, x_test, word_index: vectorized training, validation
+            texts and testing texts and word index dictionary.
+    """
+    # Create vocabulary with training texts.
+    tokenizer = text.Tokenizer(num_words=TOP_K)
+    tokenizer.fit_on_texts(train_texts)
+
+    # Vectorize training and validation texts.
+    x_train = tokenizer.texts_to_sequences(train_texts)
+    x_val = tokenizer.texts_to_sequences(val_texts)
+    x_test = tokenizer.texts_to_sequences(test_texts)
+
+    # Get max sequence length.
+    max_length = len(max(x_train, key=len))
+    if max_length > MAX_SEQUENCE_LENGTH:
+        max_length = MAX_SEQUENCE_LENGTH
+
+    # Fix sequence length to max value. Sequences shorter than the length are
+    # padded in the beginning and sequences longer are truncated
+    # at the beginning.
+    x_train = sequence.pad_sequences(x_train, maxlen=max_length)
+    x_val = sequence.pad_sequences(x_val, maxlen=max_length)
+    x_test = sequence.pad_sequences(x_test, maxlen=max_length)
+
+    pickle.dump(tokenizer, open(os.path.join(model_dir, 'tokenizer.pickle'), "wb"))
+    pickle.dump(max_length, open(os.path.join(model_dir, 'max_length.pickle'), "wb"))
+
+    return x_train, x_val, x_test, tokenizer.word_index
